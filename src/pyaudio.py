@@ -289,7 +289,8 @@ class Stream:
     def __init__(self,
                  PA_manager,
                  rate,
-                 channels,
+                 input_channels,
+                 output_channels,
                  format,
                  input=False,
                  output=False,
@@ -308,7 +309,8 @@ class Stream:
         :param PA_manager: A reference to the managing :py:class:`PyAudio`
             instance
         :param rate: Sampling rate
-        :param channels: Number of channels
+        :param input_channels: Number of input channels
+        :param output_channels: Number of output channels
         :param format: Sampling size and format. See |PaSampleFormat|.
         :param input: Specifies whether this is an input stream.
             Defaults to ``False``.
@@ -366,7 +368,7 @@ class Stream:
                 (out_data, flag)
 
             ``out_data`` is a byte array whose length should be the
-            (``frame_count * channels * bytes-per-channel``) if
+            (``frame_count * output_channels * bytes-per-channel``) if
             ``output=True`` or ``None`` if ``output=False``.  ``flag``
             must be either :py:data:`paContinue`, :py:data:`paComplete` or
             :py:data:`paAbort` (one of |PaCallbackReturnCodes|).
@@ -408,13 +410,15 @@ class Stream:
 
         # remember some parameters
         self._rate = rate
-        self._channels = channels
+        self._input_channels = input_channels
+        self._output_channels = output_channels
         self._format = format
         self._frames_per_buffer = frames_per_buffer
 
         arguments = {
             'rate' : rate,
-            'channels' : channels,
+            'input_channels' : input_channels,
+            'output_channels' : output_channels,
             'format' : format,
             'input' : input,
             'output' : output,
@@ -579,8 +583,8 @@ class Stream:
         if num_frames == None:
             # determine how many frames to read
             width = get_sample_size(self._format)
-            num_frames = int(len(frames) / (self._channels * width))
-            #print len(frames), self._channels, self._width, num_frames
+            num_frames = int(len(frames) / (self._output_channels * width))
+            #print len(frames), self._output_channels, self._width, num_frames
 
         pa.write_stream(self._stream, frames, num_frames,
                         exception_on_underflow)

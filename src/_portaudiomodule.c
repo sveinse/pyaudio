@@ -42,6 +42,12 @@
     __typeof__(b) _b = (b); \
     _a < _b ? _a : _b;      \
   })
+#define max(a, b)           \
+  ({                        \
+    __typeof__(a) _a = (a); \
+    __typeof__(b) _b = (b); \
+    _a > _b ? _a : _b;      \
+  })
 
 /************************************************************
  *
@@ -1391,7 +1397,7 @@ end:
 }
 
 static PyObject *pa_open(PyObject *self, PyObject *args, PyObject *kwargs) {
-  int rate, channels;
+  int rate, input_channels, output_channels;
   int input, output, frames_per_buffer;
   int input_device_index = -1;
   int output_device_index = -1;
@@ -1410,7 +1416,8 @@ static PyObject *pa_open(PyObject *self, PyObject *args, PyObject *kwargs) {
   _pyAudio_Stream *streamObject;
 
   static char *kwlist[] = {"rate",
-                           "channels",
+                           "input_channels",
+                           "output_channels",
                            "format",
                            "input",
                            "output",
@@ -1440,12 +1447,12 @@ static PyObject *pa_open(PyObject *self, PyObject *args, PyObject *kwargs) {
   // clang-format off
   if (!PyArg_ParseTupleAndKeywords(args, kwargs,
 #ifdef MACOSX
-                                   "iik|iiOOiO!O!O",
+                                   "iiik|iiOOiO!O!O",
 #else
-                                   "iik|iiOOiOOO",
+                                   "iiik|iiOOiOOO",
 #endif
                                    kwlist,
-                                   &rate, &channels, &format,
+                                   &rate, &input_channels, &output_channels, &format,
                                    &input, &output,
                                    &input_device_index_arg,
                                    &output_device_index_arg,
@@ -1520,7 +1527,7 @@ static PyObject *pa_open(PyObject *self, PyObject *args, PyObject *kwargs) {
     return NULL;
   }
 
-  if (channels < 1) {
+  if (input_channels < 1 && output_channels < 1) {
     PyErr_SetString(PyExc_ValueError, "Invalid audio channels");
     return NULL;
   }
@@ -1545,7 +1552,7 @@ static PyObject *pa_open(PyObject *self, PyObject *args, PyObject *kwargs) {
       return NULL;
     }
 
-    outputParameters->channelCount = channels;
+    outputParameters->channelCount = output_channels;
     outputParameters->sampleFormat = format;
     outputParameters->suggestedLatency =
         Pa_GetDeviceInfo(outputParameters->device)->defaultLowOutputLatency;
@@ -1578,7 +1585,7 @@ static PyObject *pa_open(PyObject *self, PyObject *args, PyObject *kwargs) {
       return NULL;
     }
 
-    inputParameters->channelCount = channels;
+    inputParameters->channelCount = input_channels;
     inputParameters->sampleFormat = format;
     inputParameters->suggestedLatency =
         Pa_GetDeviceInfo(inputParameters->device)->defaultLowInputLatency;
@@ -1597,7 +1604,7 @@ static PyObject *pa_open(PyObject *self, PyObject *args, PyObject *kwargs) {
     context = (PyAudioCallbackContext *)malloc(sizeof(PyAudioCallbackContext));
     context->callback = (PyObject *)stream_callback;
     context->main_thread_id = PyThreadState_Get()->thread_id;
-    context->frame_size = Pa_GetSampleSize(format) * channels;
+    context->frame_size = Pa_GetSampleSize(format) * max(input_channels, output_channels);
   }
 
   // clang-format off
