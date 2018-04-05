@@ -2,7 +2,7 @@
 
 .PHONY: docs clean build
 
-VERSION := 0.2.11-s1
+VERSION := 0.2.11.dev2
 PYTHON ?= python
 BUILD_ARGS ?=
 SPHINX ?= sphinx-build

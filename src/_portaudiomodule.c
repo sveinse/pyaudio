@@ -43,13 +43,6 @@
     __typeof__(b) _b = (b); \
     _a < _b ? _a : _b;      \
   })
-#define max(a, b)           \
-  ({                        \
-    __typeof__(a) _a = (a); \
-    __typeof__(b) _b = (b); \
-    _a > _b ? _a : _b;      \
-  })
-#endif
 
 /************************************************************
  *
@@ -756,7 +749,8 @@ static PyTypeObject _pyAudio_MacOSX_hostApiSpecificStreamInfoType = {
 typedef struct {
   PyObject *callback;
   long main_thread_id;
-  unsigned int frame_size;
+  unsigned int input_frame_size;
+  unsigned int output_frame_size;
 } PyAudioCallbackContext;
 
 typedef struct {
@@ -1283,7 +1277,8 @@ int _stream_callback_cfunction(const void *input, void *output,
 
   PyAudioCallbackContext *context = (PyAudioCallbackContext *)userData;
   PyObject *py_callback = context->callback;
-  unsigned int bytes_per_frame = context->frame_size;
+  unsigned int input_bytes_per_frame = context->input_frame_size;
+  unsigned int output_bytes_per_frame = context->output_frame_size;
   long main_thread_id = context->main_thread_id;
 
   PyObject *py_frame_count = PyLong_FromUnsignedLong(frameCount);
@@ -1304,7 +1299,7 @@ int _stream_callback_cfunction(const void *input, void *output,
 
   if (input) {
     py_input_data =
-        PyBytes_FromStringAndSize(input, bytes_per_frame * frameCount);
+        PyBytes_FromStringAndSize(input, input_bytes_per_frame * frameCount);
   }
 
   py_result =
@@ -1372,12 +1367,12 @@ int _stream_callback_cfunction(const void *input, void *output,
   // Copy bytes for playback only if this is an output stream:
   if (output) {
     char *output_data = (char *)output;
-    memcpy(output_data, pData, min(output_len, bytes_per_frame * frameCount));
+    memcpy(output_data, pData, min(output_len, output_bytes_per_frame * frameCount));
     // Pad out the rest of the buffer with 0s if callback returned
     // too few frames (and assume paComplete).
-    if (output_len < (frameCount * bytes_per_frame)) {
+    if (output_len < (frameCount * output_bytes_per_frame)) {
       memset(output_data + output_len, 0,
-             (frameCount * bytes_per_frame) - output_len);
+             (frameCount * output_bytes_per_frame) - output_len);
       return_val = paComplete;
     }
   }
@@ -1606,7 +1601,8 @@ static PyObject *pa_open(PyObject *self, PyObject *args, PyObject *kwargs) {
     context = (PyAudioCallbackContext *)malloc(sizeof(PyAudioCallbackContext));
     context->callback = (PyObject *)stream_callback;
     context->main_thread_id = PyThreadState_Get()->thread_id;
-    context->frame_size = Pa_GetSampleSize(format) * max(input_channels, output_channels);
+    context->input_frame_size = Pa_GetSampleSize(format) * input_channels;
+    context->output_frame_size = Pa_GetSampleSize(format) * output_channels;
   }
 
   // clang-format off
