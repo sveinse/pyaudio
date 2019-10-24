@@ -34,7 +34,7 @@ try:
 except ImportError:
     from distutils.core import setup, Extension
 
-__version__ = "0.2.11+s2"
+__version__ = "0.2.11+s3"
 
 # distutils will try to locate and link dynamically against portaudio.
 #
@@ -112,6 +112,8 @@ setup(name='PyAudio',
       scripts=scripts,
       py_modules=['pyaudio'],
       package_dir={'': 'src'},
+      license='MIT',
+      classifiers=['License :: OSI Approved :: MIT License'],
       ext_modules=[
     Extension('_portaudio',
               sources=pyaudio_module_sources,
