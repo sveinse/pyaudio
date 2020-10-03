@@ -931,25 +931,25 @@ class PyAudio:
 
         kwargs = {}
 
-        input_stream_info = None
-        if input_host_api_specific_stream_info:
-            input_stream_info = input_host_api_specific_stream_info._get_host_api_stream_object()
-
-        output_stream_info = None
-        if output_host_api_specific_stream_info:
-            output_stream_info = output_host_api_specific_stream_info._get_host_api_stream_object()
-
         if input_device != None:
             kwargs['input_device'] = input_device
             kwargs['input_channels'] = input_channels
             kwargs['input_format'] = input_format
-            kwargs['input_host_api_specific_stream_info'] = input_stream_info
+
+            if input_host_api_specific_stream_info:
+                kwargs['input_host_api_specific_stream_info'] = (
+                    input_host_api_specific_stream_info._get_host_api_stream_object()
+                )
 
         if output_device != None:
             kwargs['output_device'] = output_device
             kwargs['output_channels'] = output_channels
             kwargs['output_format'] = output_format
-            kwargs['output_host_api_specific_stream_info'] = output_stream_info
+
+            if output_host_api_specific_stream_info:
+                kwargs['output_host_api_specific_stream_info'] = (
+                    output_host_api_specific_stream_info._get_host_api_stream_object()
+                )
 
         return pa.is_format_supported(rate, **kwargs)
 
