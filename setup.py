@@ -2,6 +2,7 @@
 PyAudio v0.2.11: Python Bindings for PortAudio.
 
 Copyright (c) 2006 Hubert Pham
+Copyright (c) 2020 Svein Seldal
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -34,7 +35,7 @@ try:
 except ImportError:
     from distutils.core import setup, Extension
 
-__version__ = "0.2.11+s3"
+__version__ = "0.2.11+s4"
 
 # distutils will try to locate and link dynamically against portaudio.
 #

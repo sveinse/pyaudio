@@ -2,6 +2,7 @@
  * PyAudio: Python Bindings for PortAudio.
  *
  * Copyright (c) 2006 Hubert Pham
+ * Copyright (c) 2020 Svein Seldal
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -31,6 +32,9 @@
 
 #ifdef MACOSX
 #include "pa_mac_core.h"
+#endif
+#ifdef MS_WINDOWS
+#include "pa_win_wasapi.h"
 #endif
 
 #define DEFAULT_FRAMES_PER_BUFFER 1024
@@ -744,6 +748,135 @@ static PyTypeObject _pyAudio_MacOSX_hostApiSpecificStreamInfoType = {
 #endif
 
 /*************************************************************
+ * --> WINDOWS
+ *************************************************************/
+
+#ifdef MS_WINDOWS
+typedef struct {
+  // clang-format off
+  PyObject_HEAD
+      // clang-format on
+      PaWasapiStreamInfo *paWasapiStreamInfo;
+  int flags;
+} _pyAudio_Wasapi_hostApiSpecificStreamInfo;
+
+typedef _pyAudio_Wasapi_hostApiSpecificStreamInfo _pyAudio_Wasapi_HASSI;
+
+static void _pyAudio_Wasapi_hostApiSpecificStreamInfo_cleanup(
+    _pyAudio_Wasapi_HASSI *self) {
+  if (self->paWasapiStreamInfo != NULL) {
+    free(self->paWasapiStreamInfo);
+    self->paWasapiStreamInfo = NULL;
+  }
+
+  self->flags = 0;
+}
+
+static void _pyAudio_Wasapi_hostApiSpecificStreamInfo_dealloc(
+    _pyAudio_Wasapi_HASSI *self) {
+  _pyAudio_Wasapi_hostApiSpecificStreamInfo_cleanup(self);
+  Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+static int _pyAudio_Wasapi_hostApiSpecificStreamInfo_init(PyObject *_self,
+                                                          PyObject *args,
+                                                          PyObject *kwargs) {
+  _pyAudio_Wasapi_HASSI *self = (_pyAudio_Wasapi_HASSI *)_self;
+  PaWasapiStreamInfo *streaminfo;
+  int flags = 0;
+  static char *kwlist[] = {"flags", NULL};
+
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|i", kwlist, &flags)) {
+    return -1;
+  }
+
+  _pyAudio_Wasapi_hostApiSpecificStreamInfo_cleanup(self);
+
+  streaminfo = self->paWasapiStreamInfo =
+      (PaWasapiStreamInfo *)malloc(sizeof(PaWasapiStreamInfo));
+  memset(streaminfo, 0, sizeof(PaWasapiStreamInfo));
+
+  if (self->paWasapiStreamInfo == NULL) {
+    PyErr_SetString(PyExc_SystemError, "Out of memory");
+    _pyAudio_Wasapi_hostApiSpecificStreamInfo_cleanup(self);
+    return -1;
+  }
+
+  streaminfo->size = sizeof(PaWasapiStreamInfo);
+  streaminfo->hostApiType = paWASAPI;
+  streaminfo->version = 1;
+  streaminfo->flags = flags;
+
+  self->flags = flags;
+  return 0;
+}
+
+static PyObject *_pyAudio_Wasapi_hostApiSpecificStreamInfo_get_flags(
+    _pyAudio_Wasapi_HASSI *self, void *closure) {
+  return PyLong_FromLong(self->flags);
+}
+
+static int _pyAudio_Wasapi_hostApiSpecificStreamInfo_antiset(
+    _pyAudio_Wasapi_HASSI *self, PyObject *value, void *closure) {
+  /* read-only: do not allow users to change values */
+  PyErr_SetString(PyExc_AttributeError,
+                  "Fields read-only: cannot modify values");
+  return -1;
+}
+
+static PyGetSetDef _pyAudio_Wasapi_hostApiSpecificStreamInfo_getseters[] = {
+    {"flags", (getter)_pyAudio_Wasapi_hostApiSpecificStreamInfo_get_flags,
+     (setter)_pyAudio_Wasapi_hostApiSpecificStreamInfo_antiset, "flags", NULL},
+
+    {NULL}};
+
+static PyTypeObject _pyAudio_Wasapi_hostApiSpecificStreamInfoType = {
+    // clang-format off
+  PyVarObject_HEAD_INIT(NULL, 0)
+    // clang-format on
+    "_portaudio.PaWasapiStreamInfo",                   /*tp_name*/
+    sizeof(_pyAudio_Wasapi_hostApiSpecificStreamInfo), /*tp_basicsize*/
+    0,                                                 /*tp_itemsize*/
+    /*tp_dealloc*/
+    (destructor)_pyAudio_Wasapi_hostApiSpecificStreamInfo_dealloc,
+    0,                                                   /*tp_print*/
+    0,                                                   /*tp_getattr*/
+    0,                                                   /*tp_setattr*/
+    0,                                                   /*tp_compare*/
+    0,                                                   /*tp_repr*/
+    0,                                                   /*tp_as_number*/
+    0,                                                   /*tp_as_sequence*/
+    0,                                                   /*tp_as_mapping*/
+    0,                                                   /*tp_hash */
+    0,                                                   /*tp_call*/
+    0,                                                   /*tp_str*/
+    0,                                                   /*tp_getattro*/
+    0,                                                   /*tp_setattro*/
+    0,                                                   /*tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT,                                  /*tp_flags*/
+    "Windows WASAPI Specific HostAPI configuration",     /* tp_doc */
+    0,                                                   /* tp_traverse */
+    0,                                                   /* tp_clear */
+    0,                                                   /* tp_richcompare */
+    0,                                                   /* tp_weaklistoffset */
+    0,                                                   /* tp_iter */
+    0,                                                   /* tp_iternext */
+    0,                                                   /* tp_methods */
+    0,                                                   /* tp_members */
+    _pyAudio_Wasapi_hostApiSpecificStreamInfo_getseters, /* tp_getset */
+    0,                                                   /* tp_base */
+    0,                                                   /* tp_dict */
+    0,                                                   /* tp_descr_get */
+    0,                                                   /* tp_descr_set */
+    0,                                                   /* tp_dictoffset */
+    (int (*)(PyObject *, PyObject *, PyObject *))
+        _pyAudio_Wasapi_hostApiSpecificStreamInfo_init, /* tp_init */
+    0,                                                  /* tp_alloc */
+    0,                                                  /* tp_new */
+};
+#endif
+
+/*************************************************************
  * Stream Wrapper Python Object
  *************************************************************/
 
@@ -1427,10 +1560,12 @@ static PyObject *pa_open(PyObject *self, PyObject *args, PyObject *kwargs) {
                            "stream_callback",
                            NULL};
 
-#ifdef MACOSX
+#if defined(MACOSX)
   _pyAudio_MacOSX_hostApiSpecificStreamInfo *inputHostSpecificStreamInfo = NULL;
-  _pyAudio_MacOSX_hostApiSpecificStreamInfo *outputHostSpecificStreamInfo =
-      NULL;
+  _pyAudio_MacOSX_hostApiSpecificStreamInfo *outputHostSpecificStreamInfo = NULL;
+#elif defined(MS_WINDOWS)
+  _pyAudio_Wasapi_hostApiSpecificStreamInfo *inputHostSpecificStreamInfo = NULL;
+  _pyAudio_Wasapi_hostApiSpecificStreamInfo *outputHostSpecificStreamInfo = NULL;
 #else
   /* mostly ignored...*/
   PyObject *inputHostSpecificStreamInfo = NULL;
@@ -1444,7 +1579,7 @@ static PyObject *pa_open(PyObject *self, PyObject *args, PyObject *kwargs) {
 
   // clang-format off
   if (!PyArg_ParseTupleAndKeywords(args, kwargs,
-#ifdef MACOSX
+#if defined(MACOSX) || defined(MS_WINDOWS)
                                    "iiik|iiOOiO!O!O",
 #else
                                    "iiik|iiOOiOOO",
@@ -1455,12 +1590,16 @@ static PyObject *pa_open(PyObject *self, PyObject *args, PyObject *kwargs) {
                                    &input_device_index_arg,
                                    &output_device_index_arg,
                                    &frames_per_buffer,
-#ifdef MACOSX
+#if defined(MACOSX)
                                    &_pyAudio_MacOSX_hostApiSpecificStreamInfoType,
+#elif defined(MS_WINDOWS)
+                                   &_pyAudio_Wasapi_hostApiSpecificStreamInfoType,
 #endif
                                    &inputHostSpecificStreamInfo,
-#ifdef MACOSX
+#if defined(MACOSX)
                                    &_pyAudio_MacOSX_hostApiSpecificStreamInfoType,
+#elif defined(MS_WINDOWS)
+                                   &_pyAudio_Wasapi_hostApiSpecificStreamInfoType,
 #endif
                                    &outputHostSpecificStreamInfo,
                                    &stream_callback)) {
@@ -1562,6 +1701,12 @@ static PyObject *pa_open(PyObject *self, PyObject *args, PyObject *kwargs) {
           outputHostSpecificStreamInfo->paMacCoreStreamInfo;
     }
 #endif
+#ifdef MS_WINDOWS
+    if (outputHostSpecificStreamInfo) {
+      outputParameters->hostApiSpecificStreamInfo =
+          outputHostSpecificStreamInfo->paWasapiStreamInfo;
+    }
+#endif
   }
 
   if (input) {
@@ -1593,6 +1738,12 @@ static PyObject *pa_open(PyObject *self, PyObject *args, PyObject *kwargs) {
     if (inputHostSpecificStreamInfo) {
       inputParameters->hostApiSpecificStreamInfo =
           inputHostSpecificStreamInfo->paMacCoreStreamInfo;
+    }
+#endif
+#ifdef MS_WINDOWS
+    if (inputHostSpecificStreamInfo) {
+      inputParameters->hostApiSpecificStreamInfo =
+          inputHostSpecificStreamInfo->paWasapiStreamInfo;
     }
 #endif
   }
@@ -1701,9 +1852,11 @@ static PyObject *pa_is_format_supported(PyObject *self, PyObject *args,
     "input_device",
     "input_channels",
     "input_format",
+    "input_host_api_specific_stream_info",
     "output_device",
     "output_channels",
     "output_format",
+    "output_host_api_specific_stream_info",
     NULL
   };
   // clang-format on
@@ -1716,19 +1869,49 @@ static PyObject *pa_is_format_supported(PyObject *self, PyObject *args,
   PaSampleFormat input_format, output_format;
   PaError error;
 
+#if defined(MACOSX)
+  _pyAudio_MacOSX_hostApiSpecificStreamInfo *inputHostSpecificStreamInfo = NULL;
+  _pyAudio_MacOSX_hostApiSpecificStreamInfo *outputHostSpecificStreamInfo = NULL;
+#elif defined(MS_WINDOWS)
+  _pyAudio_Wasapi_hostApiSpecificStreamInfo *inputHostSpecificStreamInfo = NULL;
+  _pyAudio_Wasapi_hostApiSpecificStreamInfo *outputHostSpecificStreamInfo = NULL;
+#else
+  /* mostly ignored...*/
+  PyObject *inputHostSpecificStreamInfo = NULL;
+  PyObject *outputHostSpecificStreamInfo = NULL;
+#endif
+
   input_device = input_channels = output_device = output_channels = -1;
 
   input_format = output_format = -1;
 
   // clang-format off
-  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "f|iikiik", kwlist,
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs,
+#if defined(MACOSX) || defined(MS_WINDOWS)
+                                   "f|iikO!iikO!",
+#else
+                                   "f|iikOiikO",
+#endif
+                                   kwlist,
                                    &sample_rate,
                                    &input_device,
                                    &input_channels,
                                    &input_format,
+#if defined(MACOSX)
+                                   &_pyAudio_MacOSX_hostApiSpecificStreamInfoType,
+#elif defined(MS_WINDOWS)
+                                   &_pyAudio_Wasapi_hostApiSpecificStreamInfoType,
+#endif
+                                   &inputHostSpecificStreamInfo,
                                    &output_device,
                                    &output_channels,
-                                   &output_format)) {
+                                   &output_format,
+#if defined(MACOSX)
+                                   &_pyAudio_MacOSX_hostApiSpecificStreamInfoType,
+#elif defined(MS_WINDOWS)
+                                   &_pyAudio_Wasapi_hostApiSpecificStreamInfoType,
+#endif
+                                   &outputHostSpecificStreamInfo)) {
     return NULL;
   }
   // clang-format on
@@ -1739,6 +1922,19 @@ static PyObject *pa_is_format_supported(PyObject *self, PyObject *args,
     inputParams.sampleFormat = input_format;
     inputParams.suggestedLatency = 0;
     inputParams.hostApiSpecificStreamInfo = NULL;
+
+#ifdef MACOSX
+    if (inputHostSpecificStreamInfo) {
+      inputParams.hostApiSpecificStreamInfo =
+        inputHostSpecificStreamInfo->paMacCoreStreamInfo;
+    }
+#endif
+#ifdef MS_WINDOWS
+    if (inputHostSpecificStreamInfo) {
+      inputParams.hostApiSpecificStreamInfo =
+        inputHostSpecificStreamInfo->paWasapiStreamInfo;
+    }
+#endif
   }
 
   if (!(output_device < 0)) {
@@ -1747,6 +1943,19 @@ static PyObject *pa_is_format_supported(PyObject *self, PyObject *args,
     outputParams.sampleFormat = output_format;
     outputParams.suggestedLatency = 0;
     outputParams.hostApiSpecificStreamInfo = NULL;
+
+#ifdef MACOSX
+    if (outputHostSpecificStreamInfo) {
+      outputParams.hostApiSpecificStreamInfo =
+          outputHostSpecificStreamInfo->paMacCoreStreamInfo;
+    }
+#endif
+#ifdef MS_WINDOWS
+    if (outputHostSpecificStreamInfo) {
+      outputParams.hostApiSpecificStreamInfo =
+        outputHostSpecificStreamInfo->paWasapiStreamInfo;
+    }
+#endif
   }
 
   error = Pa_IsFormatSupported((input_device < 0) ? NULL : &inputParams,
@@ -2304,6 +2513,12 @@ init_portaudio(void)
     return ERROR_INIT;
   }
 #endif
+#ifdef MS_WINDOWS
+  _pyAudio_Wasapi_hostApiSpecificStreamInfoType.tp_new = PyType_GenericNew;
+  if (PyType_Ready(&_pyAudio_Wasapi_hostApiSpecificStreamInfoType) < 0) {
+    return ERROR_INIT;
+  }
+#endif
 
 #if PY_MAJOR_VERSION >= 3
   m = PyModule_Create(&moduledef);
@@ -2320,6 +2535,12 @@ init_portaudio(void)
   PyModule_AddObject(
       m, "paMacCoreStreamInfo",
       (PyObject *)&_pyAudio_MacOSX_hostApiSpecificStreamInfoType);
+#endif
+#ifdef MS_WINDOWS
+  Py_INCREF(&_pyAudio_Wasapi_hostApiSpecificStreamInfoType);
+  PyModule_AddObject(
+      m, "paWasapiStreamInfo",
+      (PyObject *)&_pyAudio_Wasapi_hostApiSpecificStreamInfoType);
 #endif
 
   /* Add PortAudio constants */
@@ -2421,6 +2642,22 @@ init_portaudio(void)
   PyModule_AddIntConstant(m, "paMacCoreMinimizeCPUButPlayNice",
                           paMacCoreMinimizeCPUButPlayNice);
   PyModule_AddIntConstant(m, "paMacCoreMinimizeCPU", paMacCoreMinimizeCPU);
+#endif
+#ifdef MS_WINDOWS
+  PyModule_AddIntConstant(m, "paWinWasapiExclusive",
+                          paWinWasapiExclusive);
+  //PyModule_AddIntConstant(m, "paWinWasapiRedirectHostProcessor",
+  //                        paWinWasapiRedirectHostProcessor);
+  //PyModule_AddIntConstant(m, "paWinWasapiUseChannelMask",
+  //                        paWinWasapiUseChannelMask);
+  PyModule_AddIntConstant(m, "paWinWasapiPolling",
+                          paWinWasapiPolling);
+  //PyModule_AddIntConstant(m, "paWinWasapiThreadPriority",
+  //                        paWinWasapiThreadPriority);
+  PyModule_AddIntConstant(m, "paWinWasapiExplicitSampleFormat",
+                          paWinWasapiExplicitSampleFormat);
+  PyModule_AddIntConstant(m, "paWinWasapiAutoConvert",
+                          paWinWasapiAutoConvert);
 #endif
 
 #if PY_MAJOR_VERSION >= 3

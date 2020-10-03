@@ -1,6 +1,7 @@
 # PyAudio : Python Bindings for PortAudio.
 
 # Copyright (c) 2006 Hubert Pham
+# Copyright (c) 2020 Svein Seldal
 
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -890,9 +891,11 @@ class PyAudio:
                             input_device=None,
                             input_channels=None,
                             input_format=None,
+                            input_host_api_specific_stream_info=None,
                             output_device=None,
                             output_channels=None,
-                            output_format=None):
+                            output_format=None,
+                            output_host_api_specific_stream_info=None):
         """
         Check to see if specified device configuration
         is supported. Returns True if the configuration
@@ -928,15 +931,25 @@ class PyAudio:
 
         kwargs = {}
 
+        input_stream_info = None
+        if input_host_api_specific_stream_info:
+            input_stream_info = input_host_api_specific_stream_info._get_host_api_stream_object()
+
+        output_stream_info = None
+        if output_host_api_specific_stream_info:
+            output_stream_info = output_host_api_specific_stream_info._get_host_api_stream_object()
+
         if input_device != None:
             kwargs['input_device'] = input_device
             kwargs['input_channels'] = input_channels
             kwargs['input_format'] = input_format
+            kwargs['input_host_api_specific_stream_info'] = input_stream_info
 
         if output_device != None:
             kwargs['output_device'] = output_device
             kwargs['output_channels'] = output_channels
             kwargs['output_format'] = output_format
+            kwargs['output_host_api_specific_stream_info'] = output_stream_info
 
         return pa.is_format_supported(rate, **kwargs)
 
@@ -1120,3 +1133,50 @@ else:
             """Private method."""
 
             return self._paMacCoreStreamInfo
+
+
+try:
+    paWasapiStreamInfo = pa.paWasapiStreamInfo
+except AttributeError:
+    pass
+else:
+    class PaWasapiStreamInfo:
+
+        paWinWasapiExclusive = pa.paWinWasapiExclusive
+        # paWinWasapiRedirectHostProcessor = pa.paWinWasapiRedirectHostProcessor
+        # paWinWasapiUseChannelMask = pa.paWinWasapiUseChannelMask
+        paWinWasapiPolling = pa.paWinWasapiPolling
+        # paWinWasapiThreadPriority = pa.paWinWasapiThreadPriority
+        paWinWasapiExplicitSampleFormat = pa.paWinWasapiExplicitSampleFormat
+        paWinWasapiAutoConvert = pa.paWinWasapiAutoConvert
+
+        def __init__(self, flags=None):
+            """
+            Initialize with flags. See PortAudio
+            documentation for more details on these parameters; they are
+            passed almost verbatim to the PortAudio library.
+
+            :param flags: |PaWasapiFlags| OR'ed together.
+                See :py:class:`PaWasapiStreamInfo`.
+            """
+
+            kwargs = {"flags" : flags}
+
+            if flags == None:
+                del kwargs["flags"]
+
+            self._paWasapiStreamInfo = paWasapiStreamInfo(**kwargs)
+
+        def get_flags(self):
+            """
+            Return the flags set at instantiation.
+
+            :rtype: integer
+            """
+
+            return self._paWasapiStreamInfo.flags
+
+        def _get_host_api_stream_object(self):
+            """Private method."""
+
+            return self._paWasapiStreamInfo
