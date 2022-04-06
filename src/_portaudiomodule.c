@@ -26,6 +26,8 @@
  */
 
 #include <stdio.h>
+// Copied from https://git.skeh.site/skeh/pyaudio/commit/2ee560056ec889ea7cd3ce1801b796b0939dd540
+#define PY_SSIZE_T_CLEAN
 #include "Python.h"
 #include "portaudio.h"
 #include "_portaudiomodule.h"
@@ -1428,7 +1430,7 @@ int _stream_callback_cfunction(const void *input, void *output,
   PyObject *py_status_flags = PyLong_FromUnsignedLong(statusFlags);
   PyObject *py_input_data = Py_None;
   const char *pData;
-  unsigned output_len;
+  Py_ssize_t output_len;  // Copied from https://git.skeh.site/skeh/pyaudio/commit/2ee560056ec889ea7cd3ce1801b796b0939dd540
   PyObject *py_result;
 
   if (input) {

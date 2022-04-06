@@ -35,7 +35,7 @@ try:
 except ImportError:
     from distutils.core import setup, Extension
 
-__version__ = "0.2.11+s4"
+__version__ = "0.2.11+s5"
 
 # distutils will try to locate and link dynamically against portaudio.
 #
