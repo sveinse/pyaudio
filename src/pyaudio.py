@@ -1,6 +1,7 @@
 # PyAudio : Python Bindings for PortAudio.
 
 # Copyright (c) 2006 Hubert Pham
+# Copyright (c) 2020-2022 Svein Seldal
 
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -293,7 +294,8 @@ class Stream:
     def __init__(self,
                  PA_manager,
                  rate,
-                 channels,
+                 input_channels,
+                 output_channels,
                  format,
                  input=False,
                  output=False,
@@ -312,7 +314,8 @@ class Stream:
         :param PA_manager: A reference to the managing :py:class:`PyAudio`
             instance
         :param rate: Sampling rate
-        :param channels: Number of channels
+        :param input_channels: Number of input channels
+        :param output_channels: Number of output channels
         :param format: Sampling size and format. See |PaSampleFormat|.
         :param input: Specifies whether this is an input stream.
             Defaults to ``False``.
@@ -370,7 +373,7 @@ class Stream:
                 (out_data, flag)
 
             ``out_data`` is a byte array whose length should be the
-            (``frame_count * channels * bytes-per-channel``) if
+            (``frame_count * output_channels * bytes-per-channel``) if
             ``output=True`` or ``None`` if ``output=False``.  ``flag``
             must be either :py:data:`paContinue`, :py:data:`paComplete` or
             :py:data:`paAbort` (one of |PaCallbackReturnCodes|).
@@ -412,13 +415,15 @@ class Stream:
 
         # remember some parameters
         self._rate = rate
-        self._channels = channels
+        self._input_channels = input_channels
+        self._output_channels = output_channels
         self._format = format
         self._frames_per_buffer = frames_per_buffer
 
         arguments = {
             'rate' : rate,
-            'channels' : channels,
+            'input_channels' : input_channels,
+            'output_channels' : output_channels,
             'format' : format,
             'input' : input,
             'output' : output,
@@ -583,8 +588,8 @@ class Stream:
         if num_frames == None:
             # determine how many frames to read
             width = get_sample_size(self._format)
-            num_frames = int(len(frames) / (self._channels * width))
-            #print len(frames), self._channels, self._width, num_frames
+            num_frames = int(len(frames) / (self._output_channels * width))
+            #print len(frames), self._output_channels, self._width, num_frames
 
         pa.write_stream(self._stream, frames, num_frames,
                         exception_on_underflow)
@@ -890,9 +895,11 @@ class PyAudio:
                             input_device=None,
                             input_channels=None,
                             input_format=None,
+                            input_host_api_specific_stream_info=None,
                             output_device=None,
                             output_channels=None,
-                            output_format=None):
+                            output_format=None,
+                            output_host_api_specific_stream_info=None):
         """
         Check to see if specified device configuration
         is supported. Returns True if the configuration
@@ -933,10 +940,20 @@ class PyAudio:
             kwargs['input_channels'] = input_channels
             kwargs['input_format'] = input_format
 
+            if input_host_api_specific_stream_info:
+                kwargs['input_host_api_specific_stream_info'] = (
+                    input_host_api_specific_stream_info._get_host_api_stream_object()
+                )
+
         if output_device != None:
             kwargs['output_device'] = output_device
             kwargs['output_channels'] = output_channels
             kwargs['output_format'] = output_format
+
+            if output_host_api_specific_stream_info:
+                kwargs['output_host_api_specific_stream_info'] = (
+                    output_host_api_specific_stream_info._get_host_api_stream_object()
+                )
 
         return pa.is_format_supported(rate, **kwargs)
 
@@ -1121,3 +1138,50 @@ else:
             """Private method."""
 
             return self._paMacCoreStreamInfo
+
+
+try:
+    paWasapiStreamInfo = pa.paWasapiStreamInfo
+except AttributeError:
+    pass
+else:
+    class PaWasapiStreamInfo:
+
+        paWinWasapiExclusive = pa.paWinWasapiExclusive
+        # paWinWasapiRedirectHostProcessor = pa.paWinWasapiRedirectHostProcessor
+        # paWinWasapiUseChannelMask = pa.paWinWasapiUseChannelMask
+        paWinWasapiPolling = pa.paWinWasapiPolling
+        # paWinWasapiThreadPriority = pa.paWinWasapiThreadPriority
+        paWinWasapiExplicitSampleFormat = pa.paWinWasapiExplicitSampleFormat
+        paWinWasapiAutoConvert = pa.paWinWasapiAutoConvert
+
+        def __init__(self, flags=None):
+            """
+            Initialize with flags. See PortAudio
+            documentation for more details on these parameters; they are
+            passed almost verbatim to the PortAudio library.
+
+            :param flags: |PaWasapiFlags| OR'ed together.
+                See :py:class:`PaWasapiStreamInfo`.
+            """
+
+            kwargs = {"flags" : flags}
+
+            if flags == None:
+                del kwargs["flags"]
+
+            self._paWasapiStreamInfo = paWasapiStreamInfo(**kwargs)
+
+        def get_flags(self):
+            """
+            Return the flags set at instantiation.
+
+            :rtype: integer
+            """
+
+            return self._paWasapiStreamInfo.flags
+
+        def _get_host_api_stream_object(self):
+            """Private method."""
+
+            return self._paWasapiStreamInfo

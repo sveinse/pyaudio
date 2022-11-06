@@ -7,6 +7,7 @@ variety of platforms, such as GNU/Linux, Microsoft Windows, and Apple macOS.
 PyAudio is distributed under the MIT License:
 
 Copyright (c) 2006 Hubert Pham
+Copyright (c) 2020-2022 Svein Seldal
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -32,7 +33,7 @@ import platform
 from setuptools import setup, Extension
 import sys
 
-__version__ = "0.2.12"
+__version__ = "0.2.12+s1"
 
 # setup.py/setuptools will try to locate and link dynamically against portaudio,
 # except on Windows. On Windows, setup.py will attempt to statically link in
